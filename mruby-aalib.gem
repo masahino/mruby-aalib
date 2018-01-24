@@ -1,0 +1,6 @@
+name: mruby-aalib
+description: AAlib class
+author: masahino
+website: https://github.com/masahino/mruby-aalib
+protocol: git
+repository: https://github.com/masahino/mruby-aalib.git
