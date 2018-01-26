@@ -7,9 +7,12 @@
 */
 
 #include <stdlib.h>
+#include <string.h>
 #include <aalib.h>
 #include "mruby.h"
 #include "mruby/data.h"
+#include "mruby/array.h"
+#include "mruby/variable.h"
 #include "mrb_aalib.h"
 
 #define DONE mrb_gc_arena_restore(mrb, 0);
@@ -29,11 +32,21 @@ static const struct mrb_data_type mrb_aacontext_data_type = {
 static mrb_value
 mrb_aacontext_init(mrb_state *mrb, mrb_value self)
 {
-  aa_context *context;
-  char *str;
-  int len;
+  aa_context *context = NULL;
+  int i, argc;
+  char *driver_name;
 
-  context = aa_autoinit(&aa_defparams);
+  argc = mrb_get_args(mrb, "z", &driver_name);
+  if (argc == 0) {
+    context = aa_autoinit(&aa_defparams);
+  } else {
+    for (i = 0; aa_drivers[i] != NULL; i++) {
+      if (strcmp(driver_name, aa_drivers[i]->shortname) == 0) {
+        context = aa_init(aa_drivers[i], &aa_defparams, NULL);
+        break;
+      }
+    }
+  }
   if (context == NULL) {
     fprintf(stderr, "Cannot initialize AA-lib.\n");
     exit(1);
@@ -41,7 +54,6 @@ mrb_aacontext_init(mrb_state *mrb, mrb_value self)
   DATA_TYPE(self) = &mrb_aacontext_data_type;
   DATA_PTR(self) = NULL;
 
-//  mrb_get_args(mrb, "s", &str, &len);
   DATA_PTR(self) = context;
 
   return self;
@@ -54,6 +66,15 @@ mrb_aacontext_putpixel(mrb_state *mrb, mrb_value self)
   mrb_int x, y, color;
   mrb_get_args(mrb, "iii", &x, &y, &color);
   aa_putpixel(aa, x, y, color);
+
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_aacontext_close(mrb_state *mrb, mrb_value self)
+{
+  aa_context *aa = (aa_context *)DATA_PTR(self);
+  aa_close(aa);
 
   return mrb_nil_value();
 }
@@ -79,14 +100,6 @@ mrb_aacontext_flush(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_aacontext_scrwidth(mrb_state *mrb, mrb_value self)
-{
-  aa_context *aa = (aa_context *)DATA_PTR(self);
-
-  return mrb_fixnum_value(aa_scrwidth(aa));
-}
-
-static mrb_value
 mrb_aacontext_text(mrb_state *mrb, mrb_value self)
 {
   aa_context *aa = (aa_context *)DATA_PTR(self);
@@ -103,12 +116,39 @@ mrb_aacontext_image(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_aacontext_scrwidth(mrb_state *mrb, mrb_value self)
+{
+  aa_context *aa = (aa_context *)DATA_PTR(self);
+
+  return mrb_fixnum_value(aa_scrwidth(aa));
+}
+
+
+static mrb_value
 mrb_aacontext_scrheight(mrb_state *mrb, mrb_value self)
 {
   aa_context *aa = (aa_context *)DATA_PTR(self);
 
   return mrb_fixnum_value(aa_scrheight(aa));
 }
+
+static mrb_value
+mrb_aacontext_imgwidth(mrb_state *mrb, mrb_value self)
+{
+  aa_context *aa = (aa_context *)DATA_PTR(self);
+
+  return mrb_fixnum_value(aa_imgwidth(aa));
+}
+
+
+static mrb_value
+mrb_aacontext_imgheight(mrb_state *mrb, mrb_value self)
+{
+  aa_context *aa = (aa_context *)DATA_PTR(self);
+
+  return mrb_fixnum_value(aa_imgheight(aa));
+}
+
 
 static mrb_value
 mrb_aalib_hi(mrb_state *mrb, mrb_value self)
@@ -119,11 +159,13 @@ mrb_aalib_hi(mrb_state *mrb, mrb_value self)
 void
 mrb_mruby_aalib_gem_init(mrb_state *mrb)
 {
-  struct RClass *aalib, *aa_context;
+  struct RClass *aalib, *aa_context, *aa_driver;
   aalib = mrb_define_module(mrb, "AAlib");
   aa_context = mrb_define_class_under(mrb, aalib, "Context", mrb->object_class);
-  mrb_define_method(mrb, aa_context, "initialize", mrb_aacontext_init, MRB_ARGS_ARG(0, 2));
+  mrb_define_method(mrb, aa_context, "initialize", mrb_aacontext_init, MRB_ARGS_OPT(1));
   mrb_define_method(mrb, aa_context, "putpixel", mrb_aacontext_putpixel, MRB_ARGS_REQ(3));
+  mrb_define_method(mrb, aa_context, "close", mrb_aacontext_close, MRB_ARGS_NONE());
+
   mrb_define_method(mrb, aa_context, "render", mrb_aacontext_render, MRB_ARGS_NONE());
   mrb_define_method(mrb, aa_context, "flush", mrb_aacontext_flush, MRB_ARGS_NONE());
 
@@ -132,8 +174,11 @@ mrb_mruby_aalib_gem_init(mrb_state *mrb)
 
   mrb_define_method(mrb, aa_context, "scrwidth", mrb_aacontext_scrwidth, MRB_ARGS_NONE());
   mrb_define_method(mrb, aa_context, "scrheight", mrb_aacontext_scrheight, MRB_ARGS_NONE());
+  mrb_define_method(mrb, aa_context, "imgwidth", mrb_aacontext_imgwidth, MRB_ARGS_NONE());
+  mrb_define_method(mrb, aa_context, "imgheight", mrb_aacontext_imgheight, MRB_ARGS_NONE());
+
+  aa_driver = mrb_define_class_under(mrb, aalib, "Driver", mrb->object_class);
   
-  mrb_define_class_method(mrb, aalib, "hi", mrb_aalib_hi, MRB_ARGS_NONE());
   DONE;
 }
 
