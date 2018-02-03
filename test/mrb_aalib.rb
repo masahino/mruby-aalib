@@ -14,3 +14,8 @@ assert("AAlib::Context#scrwidth") do
   aa.close
 end
 
+assert("AAlib::Context#initkbd") do
+  aa = AAlib::Context.new("stdout")
+#  assert_equal(1, aa.initkbd(0));
+#  assert_raise(aa.initkbd(0, "hoge"))
+end
