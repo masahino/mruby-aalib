@@ -25,6 +25,7 @@ MRuby::Gem::Specification.new('mruby-aalib') do |spec|
       end
       sh %Q{cd #{aalib_dir} && CPPFLAGS=#{cppflags} ./configure --without-x && make}
     end
+    self.cc.include_paths << aalib_dir+"/src/"
     self.linker.flags_before_libraries << aalib_a
   end
 
